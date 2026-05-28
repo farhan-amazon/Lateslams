@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Late Slam — Hour-wise Daily Update</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #f6f6f3;
+    --panel: #ffffff;
+    --ink: #0f1115;
+    --muted: #6b6f76;
+    --line: #e7e6e1;
+    --line-2: #efeee9;
+    --accent: oklch(0.62 0.16 32);     /* warm coral */
+    --accent-2: oklch(0.55 0.13 250);  /* cool blue */
+    --good: oklch(0.62 0.14 155);
+    --warn: oklch(0.78 0.16 80);
+    --bad:  oklch(0.58 0.20 27);
+    --chip: #f0efe9;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { padding: 28px 36px 80px; }
+
+  /* ---- Header ---- */
+  .topbar { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 22px; gap: 24px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand .dot { width: 10px; height: 10px; background: var(--accent); border-radius: 2px; transform: translateY(2px); }
+  .brand h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; font-weight: 600; }
+  .brand .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .meta { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; text-align: right; }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  /* ---- Source intake ---- */
+  .intake { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 20px; }
+  .intake-head { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .intake-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0; }
+  .intake-head .pill { font-family: var(--mono); font-size: 10px; padding: 2px 7px; background: var(--chip); border-radius: 999px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--line-2); }
+  .tabs button { background: transparent; border: 0; padding: 8px 12px; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs button.on { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+  .tab-body textarea { width: 100%; min-height: 120px; font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; resize: vertical; background: #fafaf7; color: var(--ink); outline: none; }
+  .tab-body textarea:focus { border-color: var(--accent); background: #fff; }
+  .tab-body input[type="text"] { width: 100%; font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; background: #fafaf7; outline: none; }
+  .tab-body input[type="text"]:focus { border-color: var(--accent); background: #fff; }
+  .tab-body .file-row { display: flex; align-items: center; gap: 10px; }
+  .tab-body .file-row label { font-family: var(--mono); font-size: 11px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 6px; cursor: pointer; color: var(--muted); }
+  .tab-body .file-row label:hover { border-color: var(--ink); color: var(--ink); }
+  .tab-body .hint { font-size: 11px; color: var(--muted); margin-top: 8px; font-family: var(--mono); }
+  .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+  .btn { font: inherit; font-size: 12px; font-weight: 500; padding: 8px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--ink); background: var(--ink); color: #fff; }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .err { color: var(--bad); font-size: 12px; margin-top: 8px; font-family: var(--mono); }
+  .ok { color: var(--good); font-size: 12px; margin-top: 8px; font-family: var(--mono); }
+
+  /* ---- Filters bar ---- */
+  .filters { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; align-items: end; }
+  .filt label { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .filt select, .filt input { width: 100%; font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fafaf7; outline: none; }
+  .filt select:focus, .filt input:focus { border-color: var(--accent); background: #fff; }
+  .reset { font-family: var(--mono); font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+  .reset:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ---- KPI strip ---- */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .kpi .k { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .kpi .v { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }
+  .kpi .d { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .kpi.alert .v { color: var(--bad); }
+
+  /* ---- Pattern callouts ---- */
+  .patterns { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
+  .patterns h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .patterns h3::before { content: ""; display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .pattern-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .pat { border-left: 3px solid var(--line); padding: 6px 12px; }
+  .pat.hot { border-left-color: var(--bad); }
+  .pat.warm { border-left-color: var(--warn); }
+  .pat.cool { border-left-color: var(--accent-2); }
+  .pat .lbl { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .pat .msg { font-size: 13px; margin-top: 2px; line-height: 1.45; }
+  .pat .msg b { font-weight: 600; }
+  .pat .msg .mono { font-family: var(--mono); }
+
+  /* ---- Main panels ---- */
+  .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  .panel h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+  .panel .panel-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+
+  /* ---- Table ---- */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line-2); }
+  th { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.hour { font-family: var(--mono); font-size: 12px; }
+  tr.zebra { background: #fbfaf6; }
+  td .bar-wrap { position: relative; height: 22px; width: 100%; background: #f4f3ee; border-radius: 3px; overflow: hidden; }
+  td .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); opacity: 0.85; border-radius: 3px; }
+  td .bar.hot { background: var(--bad); }
+  td .bar.warm { background: var(--warn); }
+  td .bar.cool { background: var(--accent-2); }
+  td.pct { font-weight: 600; }
+  td.pct.hot { color: var(--bad); }
+  td.pct.warm { color: oklch(0.55 0.16 60); }
+
+  /* ---- Chart ---- */
+  .chart-wrap { width: 100%; }
+  svg.chart { width: 100%; height: 360px; display: block; }
+  .legend { display: flex; gap: 18px; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+  /* ---- Empty state ---- */
+  .empty { background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; padding: 60px 30px; text-align: center; color: var(--muted); }
+  .empty h2 { color: var(--ink); margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+  .empty p { font-size: 13px; max-width: 520px; margin: 0 auto; line-height: 1.55; }
+  .empty .arrow { font-family: var(--mono); font-size: 11px; margin-top: 16px; }
+
+  footer { margin-top: 30px; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>Late Slam — Hour-wise</h1>
+    <span class="sub">Daily Update Dashboard</span>
+  </div>
+  <div class="meta">
+    <div>Source <b>picklist_created_time</b></div>
+    <div id="last-loaded">Awaiting data</div>
+  </div>
+</div>
+
+<!-- INTAKE -->
+<div class="intake" id="intake">
+  <div class="intake-head">
+    <h2>1. Load data</h2>
+    <span class="pill">CSV · 13 cols expected</span>
+  </div>
+  <div class="tabs">
+    <button data-tab="apps" class="on">Apps Script ★</button>
+    <button data-tab="paste">Paste CSV</button>
+    <button data-tab="file">Upload file</button>
+    <button data-tab="url">Published URL</button>
+  </div>
+
+  <div class="tab-body" id="tab-apps">
+    <input id="apps-url" type="text" placeholder="https://script.google.com/macros/s/AKfy...../exec" />
+    <div class="hint">Recommended. Deploy <span style="color:var(--ink)">apps-script.gs</span> as a Web App (Anyone) in your sheet, then paste the URL here. Direct Google Sheets fetch is usually blocked by CORS — Apps Script bypasses it.</div>
+    <div style="display:flex; gap:18px; align-items:center; margin-top:10px; flex-wrap:wrap;">
+      <label style="font-size:12px; color:var(--muted); display:flex; gap:6px; align-items:center;">
+        <input type="checkbox" id="auto-refresh" /> Auto-refresh every
+        <select id="auto-interval" style="font:inherit; font-size:12px; padding:3px 6px; border:1px solid var(--line); border-radius:4px; background:#fafaf7;">
+          <option value="60">1 min</option>
+          <option value="300" selected>5 min</option>
+          <option value="900">15 min</option>
+          <option value="3600">1 hr</option>
+        </select>
+      </label>
+      <label style="font-size:12px; color:var(--muted); display:flex; gap:6px; align-items:center;">
+        <input type="checkbox" id="force-fresh" /> Bypass server cache
+      </label>
+    </div>
+  </div>
+
+  <div class="tab-body" id="tab-paste" style="display:none">
+    <textarea id="csv-text" placeholder="Paste the full sheet (including headers) — copy from Google Sheets with Cmd/Ctrl+A then Cmd/Ctrl+C, or export as CSV and paste here…"></textarea>
+    <div class="hint">Required columns: snapshot_date · order_id · picklist_created_time · delivery_st · delivery_date · country_co · Late_Slam (case-insensitive)</div>
+  </div>
+
+  <div class="tab-body" id="tab-file" style="display:none">
+    <div class="file-row">
+      <label for="csv-file">Choose CSV file…</label>
+      <input id="csv-file" type="file" accept=".csv,text/csv,text/plain" style="display:none" />
+      <span id="file-name" class="hint">No file selected</span>
+    </div>
+  </div>
+
+  <div class="tab-body" id="tab-url" style="display:none">
+    <input id="csv-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv  —  or any public CSV URL" />
+    <div class="hint">In Google Sheets: File → Share → Publish to web → choose sheet → CSV → copy link. Or replace <span style="color:var(--ink)">/edit?...</span> with <span style="color:var(--ink)">/export?format=csv</span> in the URL.</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="load-btn">Load &amp; analyze</button>
+    <button class="btn ghost" id="sample-btn">Load sample data</button>
+    <span id="status"></span>
+  </div>
+</div>
+
+<!-- DASHBOARD MOUNT -->
+<div id="dash">
+  <div class="empty">
+    <h2>No data yet</h2>
+    <p>Paste your sheet above, upload a CSV, or paste a published CSV URL. The dashboard will group rows by <span class="mono">picklist_created_time</span> hour and compute <b>Late Slams ÷ Orders</b> per slot, filtered by store and date.</p>
+    <div class="arrow">↑  Use one of the three intake tabs</div>
+  </div>
+</div>
+
+<footer>
+  <div>v1 · Daily Update</div>
+  <div id="row-count"></div>
+</footer>
+
+<script>
+/* ============================================================
+   LATE SLAM HOUR-WISE DASHBOARD
+   - Parses CSV (RFC-4180-ish)
+   - Buckets by picklist_created_time hour
+   - Filters by Store (delivery_st), Date (snapshot_date), Late Slam
+   - Computes Late Slams / Orders %
+   - Highlights peak / anomaly hours
+   ============================================================ */
+
+const $ = (sel) => document.querySelector(sel);
+
+/* ---------- Tab switching ---------- */
+document.querySelectorAll('.tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    ['apps','paste','file','url'].forEach(t => {
+      document.getElementById('tab-'+t).style.display = (t === btn.dataset.tab ? 'block' : 'none');
+    });
+  });
+});
+
+/* ---------- CSV parser ---------- */
+function parseCSV(text) {
+  const rows = [];
+  let cur = '', row = [], inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+    if (inQ) {
+      if (c === '"' && n === '"') { cur += '"'; i++; }
+      else if (c === '"') { inQ = false; }
+      else { cur += c; }
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',' || c === '\t') { row.push(cur); cur = ''; }
+      else if (c === '\n') { row.push(cur); rows.push(row); cur = ''; row = []; }
+      else if (c === '\r') { /* skip */ }
+      else cur += c;
+    }
+  }
+  if (cur.length || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(x => String(x).trim() !== ''));
+}
+
+function detectDelim(text) {
+  // If user pasted from Google Sheets clipboard, it's tab-separated
+  const firstLine = text.split('\n')[0] || '';
+  if (firstLine.split('\t').length > firstLine.split(',').length) {
+    return text.replace(/\t/g, ',').replace(/,/g, '\t'); // hack — keep tabs, treat as delim
+  }
+  return text;
+}
+
+function normHeader(h) {
+  return String(h || '').trim().toLowerCase().replace(/[\s_]+/g, '_');
+}
+
+function toRows(text) {
+  // accept tab- or comma- separated
+  const usesTab = (text.split('\n')[0] || '').includes('\t');
+  let parsed;
+  if (usesTab) {
+    parsed = text.split(/\r?\n/).filter(l => l.trim() !== '').map(l => l.split('\t'));
+  } else {
+    parsed = parseCSV(text);
+  }
+  if (parsed.length < 2) throw new Error('Need a header row and at least one data row.');
+  const header = parsed[0].map(normHeader);
+  const data = parsed.slice(1).map(r => {
+    const obj = {};
+    header.forEach((h, i) => obj[h] = r[i] !== undefined ? String(r[i]).trim() : '');
+    return obj;
+  });
+  return { header, data };
+}
+
+/* ---------- Date / hour helpers ---------- */
+function parseDateTime(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  // Patterns seen: "5/28/2026 0:00", "5/27/2026 23:58", "2026-05-28 00:04"
+  // m/d/yyyy h:mm
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) {
+    const [_, mo, d, y, hh, mm, ss] = m;
+    const yr = y.length === 2 ? 2000 + +y : +y;
+    return new Date(yr, +mo - 1, +d, +hh, +mm, ss ? +ss : 0);
+  }
+  // yyyy-mm-dd hh:mm
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const [_, y, mo, d, hh, mm, ss] = m;
+    return new Date(+y, +mo - 1, +d, +hh, +mm, ss ? +ss : 0);
+  }
+  const dt = new Date(s);
+  if (!isNaN(dt)) return dt;
+  return null;
+}
+
+function parseDateOnly(s) {
+  const d = parseDateTime(s);
+  if (!d) return '';
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${da}`;
+}
+
+function fmtHourSlot(h) {
+  const a = String(h).padStart(2, '0');
+  const b = String((h + 1) % 24).padStart(2, '0');
+  return `${a}:00 – ${b}:00`;
+}
+
+function truthyLateSlam(v) {
+  if (v === undefined || v === null) return false;
+  const s = String(v).trim().toLowerCase();
+  return s === 'yes' || s === 'true' || s === '1' || s === 'y';
+}
+
+/* ---------- Column resolution ---------- */
+function resolveCols(header) {
+  const find = (...alts) => {
+    for (const a of alts) {
+      const i = header.indexOf(a);
+      if (i !== -1) return header[i];
+    }
+    // fuzzy contains
+    for (const a of alts) {
+      const f = header.find(h => h.includes(a));
+      if (f) return f;
+    }
+    return null;
+  };
+  return {
+    picklist: find('picklist_created_t', 'picklist_created_time', 'picklist_created'),
+    store:    find('delivery_st', 'store', 'delivery_store'),
+    date:     find('snapshot_date', 'snapshot', 'date'),
+    lateSlam: find('late_slam', 'lateslam', 'late'),
+    orderId:  find('order_id', 'order'),
+    country:  find('country_co', 'country'),
+  };
+}
+
+/* ---------- State ---------- */
+let STATE = {
+  rows: [],
+  cols: null,
+  loadedAt: null,
+};
+
+/* ---------- Loading paths ---------- */
+let AUTO_TIMER = null;
+let LAST_APPS_URL = '';
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  const secs = parseInt($('#auto-interval').value, 10) || 300;
+  AUTO_TIMER = setInterval(() => { if (LAST_APPS_URL) fetchFromApps(LAST_APPS_URL, true); }, secs * 1000);
+}
+function stopAutoRefresh() { if (AUTO_TIMER) { clearInterval(AUTO_TIMER); AUTO_TIMER = null; } }
+
+function fetchFromApps(url, silent) {
+  if (!silent) setStatus('Fetching from Apps Script…', '');
+  let u = url;
+  if ($('#force-fresh').checked) u += (u.includes('?') ? '&' : '?') + 'fresh=1';
+  fetch(u, { method: 'GET' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(j => {
+      if (!j.ok) throw new Error(j.error || 'Apps Script returned an error.');
+      // Convert JSON rows back into a CSV-shaped object our pipeline expects
+      const headers = j.headers.map(normHeader);
+      const data = j.rows.map(row => {
+        const o = {};
+        j.headers.forEach((h, i) => o[headers[i]] = row[h] !== undefined ? String(row[h]).trim() : '');
+        return o;
+      });
+      const cols = resolveCols(headers);
+      if (!cols.picklist) throw new Error('Missing picklist_created_time column.');
+      if (!cols.lateSlam) throw new Error('Missing Late_Slam column.');
+      STATE.rows = data; STATE.cols = cols; STATE.loadedAt = new Date();
+      setStatus(`Loaded ${data.length.toLocaleString()} rows from sheet "${j.sheet}" · ${new Date(j.fetchedAt).toLocaleTimeString()}`, 'ok');
+      $('#last-loaded').innerHTML = `Loaded <b>${data.length.toLocaleString()}</b> rows · ${new Date(j.fetchedAt).toLocaleString()}`;
+      $('#row-count').textContent = `${data.length.toLocaleString()} rows · sheet "${j.sheet}"`;
+      renderDashboard();
+    })
+    .catch(e => setStatus('Apps Script fetch failed: ' + e.message + '. Make sure the Web App is deployed with access "Anyone".', 'err'));
+}
+
+$('#auto-refresh').addEventListener('change', e => {
+  if (e.target.checked && LAST_APPS_URL) startAutoRefresh(); else stopAutoRefresh();
+});
+$('#auto-interval').addEventListener('change', () => {
+  if ($('#auto-refresh').checked && LAST_APPS_URL) startAutoRefresh();
+});
+
+$('#load-btn').addEventListener('click', () => {
+  const active = document.querySelector('.tabs button.on').dataset.tab;
+  if (active === 'apps') {
+    const u = $('#apps-url').value.trim();
+    if (!u) return setStatus('Paste your Apps Script Web App URL first.', 'err');
+    if (!u.includes('script.google.com')) return setStatus('That does not look like an Apps Script URL.', 'err');
+    LAST_APPS_URL = u;
+    try { localStorage.setItem('lateslam:appsUrl', u); } catch (_) {}
+    fetchFromApps(u, false);
+    if ($('#auto-refresh').checked) startAutoRefresh();
+    return;
+  }
+  if (active === 'paste') {
+    const txt = $('#csv-text').value.trim();
+    if (!txt) return setStatus('Paste some CSV first.', 'err');
+    ingest(txt);
+  } else if (active === 'file') {
+    const f = $('#csv-file').files[0];
+    if (!f) return setStatus('Choose a file first.', 'err');
+    const r = new FileReader();
+    r.onload = () => ingest(r.result);
+    r.readAsText(f);
+  } else if (active === 'url') {
+    const u = $('#csv-url').value.trim();
+    if (!u) return setStatus('Paste a URL first.', 'err');
+    setStatus('Fetching…', '');
+    let url = u;
+    // Convert google sheets edit URL → export csv
+    const gm = url.match(/spreadsheets\/d\/([^/]+)/);
+    if (gm && !url.includes('export') && !url.includes('output=csv')) {
+      url = `https://docs.google.com/spreadsheets/d/${gm[1]}/export?format=csv`;
+    }
+    fetch(url, { mode: 'cors' })
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(t => ingest(t))
+      .catch(e => setStatus('Fetch failed: ' + e.message + '. Try Publish to web → CSV, or paste the sheet instead.', 'err'));
+  }
+});
+
+$('#csv-file').addEventListener('change', (e) => {
+  $('#file-name').textContent = e.target.files[0]?.name || 'No file selected';
+});
+
+$('#sample-btn').addEventListener('click', () => {
+  $('#csv-text').value = SAMPLE_CSV;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'paste'));
+  ['apps','paste','file','url'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = (t === 'paste' ? 'block' : 'none');
+  });
+  ingest(SAMPLE_CSV);
+});
+
+function setStatus(msg, cls) {
+  const el = $('#status');
+  el.textContent = msg;
+  el.className = cls || '';
+}
+
+function ingest(text) {
+  try {
+    const { header, data } = toRows(text);
+    const cols = resolveCols(header);
+    if (!cols.picklist) throw new Error('Missing picklist_created_time column.');
+    if (!cols.lateSlam) throw new Error('Missing Late_Slam column.');
+    STATE.rows = data;
+    STATE.cols = cols;
+    STATE.loadedAt = new Date();
+    setStatus(`Loaded ${data.length.toLocaleString()} rows.`, 'ok');
+    $('#last-loaded').innerHTML = `Loaded <b>${data.length.toLocaleString()}</b> rows · ${STATE.loadedAt.toLocaleString()}`;
+    $('#row-count').textContent = `${data.length.toLocaleString()} rows in dataset`;
+    renderDashboard();
+  } catch (e) {
+    setStatus('Parse error: ' + e.message, 'err');
+  }
+}
+
+/* ---------- Filter state ---------- */
+const FILT = { store: '', date: '', lateSlam: '', country: '' };
+
+/* ---------- Dashboard render ---------- */
+function renderDashboard() {
+  const { rows, cols } = STATE;
+  const dash = $('#dash');
+
+  // distinct stores / dates / countries
+  const stores = uniqueSorted(rows.map(r => r[cols.store]).filter(Boolean));
+  const dates  = uniqueSorted(rows.map(r => parseDateOnly(r[cols.date])).filter(Boolean));
+  const countries = cols.country ? uniqueSorted(rows.map(r => r[cols.country]).filter(Boolean)) : [];
+
+  // build shell
+  dash.innerHTML = `
+    <div class="filters">
+      <div class="filt">
+        <label>Store (delivery_st)</label>
+        <select id="f-store"><option value="">All stores (${stores.length})</option>${stores.map(s => `<option>${s}</option>`).join('')}</select>
+      </div>
+      <div class="filt">
+        <label>Date (snapshot_date)</label>
+        <select id="f-date"><option value="">All dates (${dates.length})</option>${dates.map(d => `<option>${d}</option>`).join('')}</select>
+      </div>
+      <div class="filt">
+        <label>Late Slam</label>
+        <select id="f-late">
+          <option value="">All orders</option>
+          <option value="yes">Late slams only</option>
+          <option value="no">On-time only</option>
+        </select>
+      </div>
+      <div class="filt">
+        <label>Country</label>
+        <select id="f-country" ${countries.length ? '' : 'disabled'}>
+          <option value="">All${countries.length ? ` (${countries.length})` : ''}</option>
+          ${countries.map(c => `<option>${c}</option>`).join('')}
+        </select>
+      </div>
+      <button class="reset" id="f-reset">Reset</button>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="patterns" id="patterns"></div>
+
+    <div class="grid">
+      <div class="panel">
+        <h3>Hour-wise Breakdown</h3>
+        <div class="panel-sub">Bucketed by picklist_created_time · hover row to compare</div>
+        <table id="hour-table">
+          <thead>
+            <tr>
+              <th>Hour</th>
+              <th class="num">Orders</th>
+              <th class="num">Late Slams</th>
+              <th>Late Slam %</th>
+              <th class="num">% Value</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h3>Orders vs Late Slams · 24h</h3>
+        <div class="panel-sub">Stacked by hour · % overlay</div>
+        <div class="chart-wrap"><svg class="chart" id="chart"></svg></div>
+        <div class="legend">
+          <span><i style="background:#dcd9cf"></i>Orders</span>
+          <span><i style="background:var(--bad)"></i>Late slams</span>
+          <span><i style="background:var(--accent-2)"></i>Late slam %</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // wire filters
+  $('#f-store').addEventListener('change', e => { FILT.store = e.target.value; renderBody(); });
+  $('#f-date').addEventListener('change', e => { FILT.date = e.target.value; renderBody(); });
+  $('#f-late').addEventListener('change', e => { FILT.lateSlam = e.target.value; renderBody(); });
+  if (cols.country) $('#f-country').addEventListener('change', e => { FILT.country = e.target.value; renderBody(); });
+  $('#f-reset').addEventListener('click', () => {
+    FILT.store = FILT.date = FILT.lateSlam = FILT.country = '';
+    $('#f-store').value = ''; $('#f-date').value = ''; $('#f-late').value = '';
+    if (cols.country) $('#f-country').value = '';
+    renderBody();
+  });
+
+  renderBody();
+}
+
+function uniqueSorted(arr) {
+  return Array.from(new Set(arr)).sort();
+}
+
+function filteredRows() {
+  const { rows, cols } = STATE;
+  return rows.filter(r => {
+    if (FILT.store && r[cols.store] !== FILT.store) return false;
+    if (FILT.date && parseDateOnly(r[cols.date]) !== FILT.date) return false;
+    if (FILT.country && cols.country && r[cols.country] !== FILT.country) return false;
+    if (FILT.lateSlam === 'yes' && !truthyLateSlam(r[cols.lateSlam])) return false;
+    if (FILT.lateSlam === 'no' && truthyLateSlam(r[cols.lateSlam])) return false;
+    return true;
+  });
+}
+
+function renderBody() {
+  const { cols } = STATE;
+  const rows = filteredRows();
+
+  // bucket
+  const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, orders: 0, late: 0 }));
+  for (const r of rows) {
+    const dt = parseDateTime(r[cols.picklist]);
+    if (!dt) continue;
+    const h = dt.getHours();
+    buckets[h].orders += 1;
+    if (truthyLateSlam(r[cols.lateSlam])) buckets[h].late += 1;
+  }
+  buckets.forEach(b => b.pct = b.orders ? (b.late / b.orders) * 100 : 0);
+
+  // KPIs
+  const totalOrders = rows.length;
+  const totalLate = rows.filter(r => truthyLateSlam(r[cols.lateSlam])).length;
+  const overall = totalOrders ? (totalLate / totalOrders) * 100 : 0;
+  const withOrders = buckets.filter(b => b.orders > 0);
+  const peak = withOrders.length ? withOrders.reduce((a,b) => b.pct > a.pct ? b : a) : null;
+  const busiest = withOrders.length ? withOrders.reduce((a,b) => b.orders > a.orders ? b : a) : null;
+
+  $('#kpis').innerHTML = `
+    <div class="kpi">
+      <div class="k">Total orders</div>
+      <div class="v">${totalOrders.toLocaleString()}</div>
+      <div class="d">${activeFilterSummary()}</div>
+    </div>
+    <div class="kpi ${overall >= 5 ? 'alert' : ''}">
+      <div class="k">Total late slams</div>
+      <div class="v">${totalLate.toLocaleString()}</div>
+      <div class="d">${overall.toFixed(2)}% of orders</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Peak late-slam hour</div>
+      <div class="v">${peak ? fmtHourSlot(peak.hour) : '—'}</div>
+      <div class="d">${peak ? `${peak.pct.toFixed(2)}% · ${peak.late}/${peak.orders}` : 'No data'}</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Busiest hour</div>
+      <div class="v">${busiest ? fmtHourSlot(busiest.hour) : '—'}</div>
+      <div class="d">${busiest ? `${busiest.orders} orders · ${busiest.pct.toFixed(2)}% late` : 'No data'}</div>
+    </div>
+  `;
+
+  // Patterns
+  renderPatterns(buckets, overall);
+
+  // Table — sort by pct desc by default
+  const sorted = withOrders.slice().sort((a, b) => b.pct - a.pct);
+  const maxPct = Math.max(0.001, ...sorted.map(b => b.pct));
+  const tbody = $('#hour-table tbody');
+  tbody.innerHTML = sorted.map((b, i) => {
+    const cls = b.pct >= 8 ? 'hot' : b.pct >= 4 ? 'warm' : '';
+    return `<tr class="${i % 2 ? 'zebra' : ''}">
+      <td class="hour">${fmtHourSlot(b.hour)}</td>
+      <td class="num">${b.orders.toLocaleString()}</td>
+      <td class="num">${b.late.toLocaleString()}</td>
+      <td><div class="bar-wrap"><div class="bar ${cls}" style="width:${(b.pct/maxPct)*100}%"></div></div></td>
+      <td class="num pct ${cls}">${b.pct.toFixed(2)}%</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">No rows match current filters.</td></tr>`;
+
+  // Chart
+  drawChart(buckets);
+}
+
+function activeFilterSummary() {
+  const bits = [];
+  if (FILT.store) bits.push('store ' + FILT.store);
+  if (FILT.date) bits.push('date ' + FILT.date);
+  if (FILT.country) bits.push(FILT.country);
+  if (FILT.lateSlam === 'yes') bits.push('late only');
+  if (FILT.lateSlam === 'no') bits.push('on-time only');
+  return bits.length ? bits.join(' · ') : 'no filters';
+}
+
+/* ---------- Pattern detection ---------- */
+function renderPatterns(buckets, overall) {
+  const withOrders = buckets.filter(b => b.orders > 0);
+  const patterns = [];
+  if (!withOrders.length) {
+    $('#patterns').innerHTML = `<h3>Patterns &amp; signals</h3><div style="color:var(--muted);font-size:13px">Not enough data to surface signals yet.</div>`;
+    return;
+  }
+
+  // 1. Hours significantly above overall avg
+  const avg = overall;
+  const above = withOrders.filter(b => b.orders >= 5 && b.pct >= avg + 3).sort((a,b) => b.pct - a.pct).slice(0, 3);
+  if (above.length) {
+    patterns.push({
+      cls: 'hot',
+      lbl: 'Above-average risk',
+      msg: `Hours running hotter than overall avg (${avg.toFixed(2)}%): ` + above.map(b => `<b class="mono">${fmtHourSlot(b.hour)}</b> at <b>${b.pct.toFixed(2)}%</b>`).join(', ') + '.'
+    });
+  }
+
+  // 2. Cluster detection — 3+ consecutive hours over avg
+  let runStart = -1, runLen = 0, bestRun = null;
+  for (let h = 0; h < 24; h++) {
+    const b = buckets[h];
+    if (b.orders >= 3 && b.pct >= Math.max(avg, 3)) {
+      if (runStart === -1) runStart = h;
+      runLen++;
+    } else {
+      if (runLen >= 3 && (!bestRun || runLen > bestRun.len)) bestRun = { start: runStart, len: runLen };
+      runStart = -1; runLen = 0;
+    }
+  }
+  if (runLen >= 3 && (!bestRun || runLen > bestRun.len)) bestRun = { start: runStart, len: runLen };
+  if (bestRun) {
+    patterns.push({
+      cls: 'warm',
+      lbl: 'Sustained window',
+      msg: `Late slams stay elevated for <b>${bestRun.len} consecutive hours</b> starting <span class="mono">${fmtHourSlot(bestRun.start)}</span>. Likely a staffing or wave-cutoff issue, not a one-off.`
+    });
+  }
+
+  // 3. Volume + risk overlap
+  const peakVol = withOrders.reduce((a,b) => b.orders > a.orders ? b : a);
+  if (peakVol.pct >= avg + 1) {
+    patterns.push({
+      cls: 'hot',
+      lbl: 'Peak hour at risk',
+      msg: `Highest-volume hour <b class="mono">${fmtHourSlot(peakVol.hour)}</b> (${peakVol.orders} orders) is also above average at <b>${peakVol.pct.toFixed(2)}%</b> late.`
+    });
+  }
+
+  // 4. Cleanest hour
+  const clean = withOrders.filter(b => b.orders >= 5).reduce((a,b) => (b.pct < a.pct ? b : a), { pct: Infinity });
+  if (clean.pct !== Infinity) {
+    patterns.push({
+      cls: 'cool',
+      lbl: 'Cleanest hour',
+      msg: `<b class="mono">${fmtHourSlot(clean.hour)}</b> has the lowest late-slam rate at <b>${clean.pct.toFixed(2)}%</b> across ${clean.orders} orders.`
+    });
+  }
+
+  // 5. Store split if no store filter
+  if (!FILT.store && STATE.cols.store) {
+    const byStore = {};
+    for (const r of filteredRows()) {
+      const s = r[STATE.cols.store];
+      if (!s) continue;
+      byStore[s] = byStore[s] || { orders: 0, late: 0 };
+      byStore[s].orders++;
+      if (truthyLateSlam(r[STATE.cols.lateSlam])) byStore[s].late++;
+    }
+    const ranked = Object.entries(byStore).filter(([_,v]) => v.orders >= 5).map(([k,v]) => ({ store: k, pct: v.late/v.orders*100, orders: v.orders, late: v.late })).sort((a,b) => b.pct - a.pct);
+    if (ranked.length >= 2) {
+      const top = ranked[0];
+      patterns.push({
+        cls: 'warm',
+        lbl: 'Worst store',
+        msg: `<b class="mono">${top.store}</b> leads with <b>${top.pct.toFixed(2)}%</b> late (${top.late}/${top.orders}). Filter by store above to drill in.`
+      });
+    }
+  }
+
+  $('#patterns').innerHTML = `<h3>Patterns &amp; signals</h3>
+    <div class="pattern-list">${patterns.map(p => `
+      <div class="pat ${p.cls}">
+        <div class="lbl">${p.lbl}</div>
+        <div class="msg">${p.msg}</div>
+      </div>`).join('') || '<div style="color:var(--muted);font-size:13px">No notable patterns at the moment.</div>'}
+    </div>`;
+}
+
+/* ---------- Chart ---------- */
+function drawChart(buckets) {
+  const svg = $('#chart');
+  const w = svg.clientWidth || 600, h = 360;
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  const padL = 36, padR = 40, padT = 16, padB = 36;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const maxOrders = Math.max(1, ...buckets.map(b => b.orders));
+  const maxPct = Math.max(1, ...buckets.map(b => b.pct));
+  const barW = innerW / 24 * 0.7;
+  const gap  = innerW / 24 * 0.3;
+  const xFor = (i) => padL + i * (innerW / 24) + gap/2;
+  const yOrders = (v) => padT + innerH - (v / maxOrders) * innerH;
+  const yPct = (v) => padT + innerH - (v / maxPct) * innerH;
+
+  let out = '';
+
+  // grid lines
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (innerH / 4) * i;
+    out += `<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" stroke="#eeece5" stroke-width="1"/>`;
+  }
+
+  // bars (orders)
+  buckets.forEach((b, i) => {
+    const x = xFor(i);
+    const y = yOrders(b.orders);
+    out += `<rect x="${x}" y="${y}" width="${barW}" height="${padT + innerH - y}" fill="#dcd9cf" rx="2"/>`;
+    if (b.late > 0) {
+      const yL = yOrders(b.late);
+      out += `<rect x="${x}" y="${yL}" width="${barW}" height="${padT + innerH - yL}" fill="oklch(0.58 0.20 27)" rx="2"/>`;
+    }
+  });
+
+  // % line
+  let path = '';
+  buckets.forEach((b, i) => {
+    const x = xFor(i) + barW/2;
+    const y = yPct(b.pct);
+    path += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+  });
+  out += `<path d="${path}" fill="none" stroke="oklch(0.55 0.13 250)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+  buckets.forEach((b, i) => {
+    if (b.orders === 0) return;
+    const x = xFor(i) + barW/2;
+    const y = yPct(b.pct);
+    out += `<circle cx="${x}" cy="${y}" r="2.4" fill="oklch(0.55 0.13 250)"/>`;
+  });
+
+  // x-axis labels every 3 hrs
+  for (let i = 0; i < 24; i += 3) {
+    const x = xFor(i) + barW/2;
+    out += `<text x="${x}" y="${h - 14}" font-family="ui-monospace,monospace" font-size="10" fill="#6b6f76" text-anchor="middle">${String(i).padStart(2,'0')}</text>`;
+  }
+  // y axis (orders)
+  for (let i = 0; i <= 4; i++) {
+    const v = Math.round((maxOrders / 4) * (4 - i));
+    const y = padT + (innerH / 4) * i;
+    out += `<text x="${padL - 6}" y="${y + 3}" font-family="ui-monospace,monospace" font-size="10" fill="#6b6f76" text-anchor="end">${v}</text>`;
+  }
+  // y axis right (pct)
+  for (let i = 0; i <= 4; i++) {
+    const v = (maxPct / 4) * (4 - i);
+    const y = padT + (innerH / 4) * i;
+    out += `<text x="${w - padR + 6}" y="${y + 3}" font-family="ui-monospace,monospace" font-size="10" fill="oklch(0.55 0.13 250)" text-anchor="start">${v.toFixed(1)}%</text>`;
+  }
+
+  svg.innerHTML = out;
+}
+
+/* ---------- Restore saved Apps Script URL ---------- */
+try {
+  const saved = localStorage.getItem('lateslam:appsUrl');
+  if (saved) $('#apps-url').value = saved;
+} catch (_) {}
+
+/* ---------- Sample data ---------- */
+const SAMPLE_CSV = `snapshot_date,order_id,picklist_created_time,delivery_st,delivery_date,country_co,pick_assignment_t,staging_time,assignment,pl_create_t,promise_ut,units_pick,Late_Slam
+5/28/2026 0:00,408-4143621-7632315,5/28/2026 0:00,QDB6,,AE,5/28/2026 0:00,5/28/2026 0:04,237,242,360,12,FALSE
+5/27/2026 0:00,171-6026361-2875524,5/27/2026 0:00,QAA2,,AE,5/27/2026 0:00,5/27/2026 0:04,223,230,360,13,FALSE
+5/27/2026 0:00,407-9723389-3741916,5/27/2026 23:58,QED1,5/27/2026 0:00,AE,5/27/2026 23:58,5/28/2026 0:04,209,219,300,9,FALSE
+5/27/2026 0:00,406-9341046-3844366,5/27/2026 23:56,QAB2,,AE,5/27/2026 23:56,5/28/2026 0:04,296,302,360,14,FALSE
+5/27/2026 0:00,406-8274775-2889913,5/27/2026 23:59,QED1,5/27/2026 0:00,AE,5/27/2026 23:59,5/28/2026 0:04,86,103,120,3,YES
+5/27/2026 0:00,406-0001513-4797174,5/27/2026 23:57,QAB2,,AE,5/27/2026 23:57,5/28/2026 0:04,211,221,300,11,YES
+5/27/2026 0:00,171-6557930-7291530,5/27/2026 1:14,QAA2,,AE,5/27/2026 1:14,5/27/2026 1:18,201,210,300,5,YES
+5/27/2026 0:00,402-5245298-9193160,5/27/2026 2:33,QDB6,,AE,5/27/2026 2:33,5/27/2026 2:37,180,190,300,8,YES
+5/27/2026 0:00,402-5245298-9193161,5/27/2026 2:45,QDB6,,AE,5/27/2026 2:45,5/27/2026 2:49,180,190,300,8,YES
+5/27/2026 0:00,402-5245298-9193162,5/27/2026 2:50,QED1,5/27/2026 0:00,AE,5/27/2026 2:50,5/27/2026 2:54,180,190,300,8,YES
+5/27/2026 0:00,402-5245298-9193163,5/27/2026 3:10,QAB2,,AE,5/27/2026 3:10,5/27/2026 3:14,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193164,5/27/2026 4:22,QAA2,,AE,5/27/2026 4:22,5/27/2026 4:26,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193165,5/27/2026 5:05,QDB6,,AE,5/27/2026 5:05,5/27/2026 5:09,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193166,5/27/2026 6:30,QED1,5/27/2026 0:00,AE,5/27/2026 6:30,5/27/2026 6:34,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193167,5/27/2026 7:11,QAB2,,AE,5/27/2026 7:11,5/27/2026 7:15,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193168,5/27/2026 8:45,QAA2,,AE,5/27/2026 8:45,5/27/2026 8:49,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193169,5/27/2026 9:30,QDB6,,AE,5/27/2026 9:30,5/27/2026 9:34,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193170,5/27/2026 10:15,QED1,5/27/2026 0:00,AE,5/27/2026 10:15,5/27/2026 10:19,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193171,5/27/2026 11:50,QAB2,,AE,5/27/2026 11:50,5/27/2026 11:54,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193172,5/27/2026 12:33,QAA2,,AE,5/27/2026 12:33,5/27/2026 12:37,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193173,5/27/2026 13:01,QDB6,,AE,5/27/2026 13:01,5/27/2026 13:05,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193174,5/27/2026 14:44,QED1,5/27/2026 0:00,AE,5/27/2026 14:44,5/27/2026 14:48,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193175,5/27/2026 15:20,QAB2,,AE,5/27/2026 15:20,5/27/2026 15:24,180,190,300,8,YES
+5/27/2026 0:00,402-5245298-9193176,5/27/2026 16:08,QAA2,,AE,5/27/2026 16:08,5/27/2026 16:12,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193177,5/27/2026 17:50,QDB6,,AE,5/27/2026 17:50,5/27/2026 17:54,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193178,5/27/2026 18:35,QED1,5/27/2026 0:00,AE,5/27/2026 18:35,5/27/2026 18:39,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193179,5/27/2026 19:12,QAB2,,AE,5/27/2026 19:12,5/27/2026 19:16,180,190,300,8,YES
+5/27/2026 0:00,402-5245298-9193180,5/27/2026 20:30,QAA2,,AE,5/27/2026 20:30,5/27/2026 20:34,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193181,5/27/2026 21:45,QDB6,,AE,5/27/2026 21:45,5/27/2026 21:49,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193182,5/27/2026 22:18,QED1,5/27/2026 0:00,AE,5/27/2026 22:18,5/27/2026 22:22,180,190,300,8,YES
+5/27/2026 0:00,402-5245298-9193183,5/27/2026 1:30,QAA2,,AE,5/27/2026 1:30,5/27/2026 1:34,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193184,5/27/2026 2:05,QDB6,,AE,5/27/2026 2:05,5/27/2026 2:09,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193185,5/27/2026 2:15,QED1,5/27/2026 0:00,AE,5/27/2026 2:15,5/27/2026 2:19,180,190,300,8,YES
+5/27/2026 0:00,402-5245298-9193186,5/27/2026 3:22,QAB2,,AE,5/27/2026 3:22,5/27/2026 3:26,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193187,5/27/2026 0:30,QAA2,,AE,5/27/2026 0:30,5/27/2026 0:34,180,190,300,8,FALSE
+5/27/2026 0:00,402-5245298-9193188,5/27/2026 0:45,QDB6,,AE,5/27/2026 0:45,5/27/2026 0:49,180,190,300,8,FALSE`;
+
+</script>
+</body>
+</html>
